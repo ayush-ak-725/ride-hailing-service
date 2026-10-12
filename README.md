@@ -19,6 +19,21 @@ Prerequisite: JDK 25. Maven is provided by the wrapper.
 
 Swagger UI: <http://localhost:8080/swagger-ui.html>. OpenAPI JSON: `/v3/api-docs`.
 
+### With Docker
+
+Only Docker is needed; the jar is built inside the image.
+
+```bash
+docker build -t ride-hailing-service .
+docker run --rm -p 8080:8080 ride-hailing-service
+```
+
+The image is built in two stages. The first compiles with the project's `./mvnw`; the second is a
+JRE-only runtime that runs as a non-root user. Dependencies are cached in their own Docker layer,
+so a code change only rebuilds a small layer. The heap is sized from the container's memory limit
+(`-XX:MaxRAMPercentage=75`), and `docker stop` shuts the app down gracefully. Tests are not run
+during `docker build`; run `./mvnw test` (or CI) for that.
+
 ## API
 
 | Method | Path | Purpose | Notable errors |
