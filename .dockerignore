@@ -1,0 +1,10 @@
+# Keep the build context small and free of local or generated files.
+.git
+.idea
+*.iml
+.vscode
+target
+out
+.DS_Store
+scripts
+README.md

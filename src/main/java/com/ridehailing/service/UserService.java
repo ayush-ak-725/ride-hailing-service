@@ -4,10 +4,14 @@ import com.ridehailing.domain.User;
 import com.ridehailing.error.DomainException;
 import com.ridehailing.error.ErrorCode;
 import com.ridehailing.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class UserService {
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository users;
 
@@ -20,6 +24,7 @@ public class UserService {
         if (!users.saveIfPhoneUnique(user)) {
             throw new DomainException(ErrorCode.DUPLICATE_USER, "A user with this phone number already exists");
         }
+        log.info("User registered: userId={}", user.id());   // phone is personal data: not logged
         return user;
     }
 

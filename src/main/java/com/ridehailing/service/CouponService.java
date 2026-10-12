@@ -5,12 +5,16 @@ import com.ridehailing.error.DomainException;
 import com.ridehailing.error.ErrorCode;
 import com.ridehailing.pricing.Discount;
 import com.ridehailing.repository.CouponRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
 
 @Service
 public class CouponService {
+
+    private static final Logger log = LoggerFactory.getLogger(CouponService.class);
 
     private final CouponRepository coupons;
 
@@ -23,6 +27,7 @@ public class CouponService {
         if (!coupons.saveIfAbsent(coupon)) {
             throw new DomainException(ErrorCode.DUPLICATE_COUPON, "Coupon " + coupon.code() + " already exists");
         }
+        log.info("Coupon added: code={} discount={}", coupon.code(), discount);
         return coupon;
     }
 
@@ -30,6 +35,7 @@ public class CouponService {
         if (!coupons.delete(normalize(code))) {
             throw new DomainException(ErrorCode.COUPON_NOT_FOUND, "Coupon " + normalize(code) + " not found");
         }
+        log.info("Coupon deleted: code={}", normalize(code));
     }
 
     /** Looks up a coupon being applied to a booking; unknown or deleted codes are rejected. */

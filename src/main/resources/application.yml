@@ -37,3 +37,10 @@ pricing:
     fees:
       HATCHBACK: 25
       SEDAN: 40
+
+# Every log line carries the request id (also returned as the X-Request-Id header).
+logging:
+  pattern:
+    correlation: "[%X{requestId:-startup}] "
+  level:
+    com.ridehailing: INFO          # set to DEBUG to see matching candidates, lost races and location updates

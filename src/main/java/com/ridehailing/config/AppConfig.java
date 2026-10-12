@@ -12,6 +12,8 @@ import com.ridehailing.pricing.RateCard;
 import com.ridehailing.pricing.SurgePricing;
 import com.ridehailing.pricing.UtilizationSurgePricing;
 import com.ridehailing.repository.DriverRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,6 +25,8 @@ import java.util.Map;
 @Configuration
 public class AppConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
+
     @Bean
     public Clock clock() {
         return Clock.systemUTC();
@@ -31,12 +35,16 @@ public class AppConfig {
     @Bean
     public FareCalculator fareCalculator(PricingProperties pricing) {
         Map<CarType, RateCard> rateCards = new EnumMap<>(CarType.class);
-        pricing.rateCards().forEach((carType, card) -> rateCards.put(carType, card.toRateCard()));
+        pricing.rateCards().forEach((carType, card) -> {
+            rateCards.put(carType, card.toRateCard());
+            log.info("Rate card {}: minimumFare={} slabs={}", carType, card.minimumFare(), card.slabs());
+        });
         return new FareCalculator(rateCards);
     }
 
     @Bean
     public DriverMatchingStrategy driverMatchingStrategy(RideProperties ride) {
+        log.info("Driver matching: strategy={} searchRadiusKm={}", ride.matchingStrategy(), ride.searchRadiusKm());
         return switch (ride.matchingStrategy()) {
             case NEAREST -> new NearestDriverStrategy();
             case HIGHEST_RATED -> new HighestRatedDriverStrategy();
@@ -47,13 +55,16 @@ public class AppConfig {
     public SurgePricing surgePricing(PricingProperties pricing, RideProperties ride, DriverRepository drivers) {
         PricingProperties.Surge surge = pricing.surge();
         if (!surge.enabled() || surge.tiers() == null || surge.tiers().isEmpty()) {
+            log.info("Surge pricing: disabled");
             return new NoSurge();
         }
+        log.info("Surge pricing: utilization tiers={}", surge.tiers());
         return new UtilizationSurgePricing(drivers, ride.searchRadiusKm(), surge.tiers());
     }
 
     @Bean
     public CancellationFeePolicy cancellationFeePolicy(PricingProperties pricing) {
+        log.info("Cancellation: gracePeriod={} fees={}", pricing.cancellation().gracePeriod(), pricing.cancellation().fees());
         return new GracePeriodCancellationFeePolicy(
                 pricing.cancellation().gracePeriod(), pricing.cancellation().fees());
     }
