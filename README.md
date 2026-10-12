@@ -15,6 +15,7 @@ Prerequisite: JDK 25. Maven is provided by the wrapper.
 ./mvnw spring-boot:run          # http://localhost:8080
 ./mvnw test                     # all tests
 ./scripts/demo.sh               # walks through every demo edge case (needs curl + jq, server running)
+./scripts/api-check.sh          # asserts success + failure responses for every endpoint (72 checks)
 ```
 
 Swagger UI: <http://localhost:8080/swagger-ui.html>. OpenAPI JSON: `/v3/api-docs`.
@@ -126,6 +127,18 @@ flowchart LR
 | `BookingConcurrencyTest` | Two bookings can never get the same driver |
 | `UtilizationSurgePricingTest`, `DriverMatchingStrategyTest` | Strategy behavior on its own |
 | `RideHailingApiTest` | HTTP lifecycle, status codes, error shape, validation details, unknown enum, infinite coordinates, OpenAPI document |
+
+**Black-box endpoint check.** `scripts/api-check.sh` sends real HTTP requests to a running server and
+checks the status code and key fields for every endpoint. It covers each requirement's success and
+failure cases (72 checks), including 20 parallel bookings for one driver. Pass a second URL to also
+check the post-grace cancellation fee and the highest-rated strategy, against a server started with
+overridden config:
+
+```bash
+docker run -d -p 8080:8080 ride-hailing-service
+docker run -d -p 8082:8080 ride-hailing-service --pricing.cancellation.grace-period=0s --ride.matching-strategy=highest-rated
+./scripts/api-check.sh http://localhost:8080 http://localhost:8082
+```
 
 ## Making the likely live-extension changes
 
