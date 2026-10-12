@@ -95,12 +95,14 @@ class FareCalculatorTest {
     }
 
     @Test
-    void roundsToPaiseAndBreakdownAddsUp() {
+    void pricesTheRoundedDistanceAndBreakdownAddsUp() {
         Discount thirdOff = new PercentageDiscount(new BigDecimal("33.333"), null);
 
         FareBreakdown fare = calculator.calculate(CarType.HATCHBACK, km("7.333"), NO_SURGE, thirdOff);
 
-        assertThat(fare.baseFare()).isEqualByComparingTo("55.67");  // 44 + 2.333*5 = 55.665
+        assertThat(fare.distanceKm()).isEqualByComparingTo("7.33");
+        assertThat(fare.baseFare()).isEqualByComparingTo("55.65");  // priced on the shown 7.33 km: 44 + 2.33*5
+        assertThat(fare.discount()).isEqualByComparingTo("18.55");  // 55.65 * 33.333% = 18.5498 -> 18.55
         assertThat(fare.baseFare().scale()).isEqualTo(2);
         assertThat(fare.surgedFare().subtract(fare.discount())).isEqualByComparingTo(fare.total());
     }

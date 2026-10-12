@@ -9,6 +9,8 @@ import com.ridehailing.error.ErrorCode;
 import com.ridehailing.repository.DriverRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 @Service
 public class DriverService {
 
@@ -20,9 +22,10 @@ public class DriverService {
 
     public Driver register(String name, String phone, String plateNumber, CarType carType,
                            Location location, double rating) {
-        Driver driver = new Driver(drivers.nextId(), name, phone, new Cab(plateNumber, carType, location), rating);
+        String plate = plateNumber.trim().toUpperCase(Locale.ROOT);   // "ka01ab1234" and "KA01AB1234" are one cab
+        Driver driver = new Driver(drivers.nextId(), name, phone, new Cab(plate, carType, location), rating);
         if (!drivers.saveIfPlateUnique(driver)) {
-            throw new DomainException(ErrorCode.DUPLICATE_CAB, "A cab with plate " + plateNumber + " is already registered");
+            throw new DomainException(ErrorCode.DUPLICATE_CAB, "A cab with plate " + plate + " is already registered");
         }
         return driver;
     }

@@ -358,6 +358,6 @@ class RideServiceTest {
 
         assertFailsWith(ErrorCode.DUPLICATE_USER, () -> app.users.register("Copy", user.phone()));
         assertFailsWith(ErrorCode.DUPLICATE_CAB, () -> app.drivers.register("Copy", "7000000000",
-                driver.cab().plateNumber(), CarType.SEDAN, ORIGIN, 4.0));
+                driver.cab().plateNumber().toLowerCase(), CarType.SEDAN, ORIGIN, 4.0));
     }
 }

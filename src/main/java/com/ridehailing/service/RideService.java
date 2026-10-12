@@ -64,10 +64,14 @@ public class RideService {
         if (!user.tryStartRide()) {
             throw new DomainException(ErrorCode.USER_HAS_ONGOING_RIDE, "User " + userId + " already has an ongoing ride");
         }
-        Driver driver = driverAllocator.claim(carType, pickup).orElseThrow(() -> {
-            user.finishRide();
-            return new DomainException(ErrorCode.NO_DRIVER_AVAILABLE, "No driver available near the pickup point for " + carType);
-        });
+        Driver driver;
+        try {
+            driver = driverAllocator.claim(carType, pickup).orElseThrow(() -> new DomainException(
+                    ErrorCode.NO_DRIVER_AVAILABLE, "No driver available near the pickup point for " + carType));
+        } catch (RuntimeException e) {
+            user.finishRide();   // never leave the user reserved when no ride was created
+            throw e;
+        }
 
         Ride ride = new Ride(rides.nextId(), user.id(), driver.id(), carType, driver.cab().carType(), pickup,
                 surgeMultiplier, coupon == null ? null : coupon.code(), coupon == null ? null : coupon.discount(),
