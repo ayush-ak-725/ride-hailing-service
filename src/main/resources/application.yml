@@ -1,3 +1,24 @@
 spring:
   application:
     name: ride-hailing-service
+
+ride:
+  search-radius-km: 5
+  matching-strategy: nearest        # nearest | highest-rated
+
+# Marginal slabs: each km is charged at the rate of the slab it falls in.
+# A slab without up-to-km is "and beyond" and must be last.
+pricing:
+  rate-cards:
+    HATCHBACK:
+      minimum-fare: 50
+      slabs:
+        - { up-to-km: 2, rate-per-km: 10 }
+        - { up-to-km: 5, rate-per-km: 8 }
+        - { rate-per-km: 5 }
+    SEDAN:
+      minimum-fare: 80
+      slabs:
+        - { up-to-km: 2, rate-per-km: 15 }
+        - { up-to-km: 5, rate-per-km: 12 }
+        - { rate-per-km: 8 }
