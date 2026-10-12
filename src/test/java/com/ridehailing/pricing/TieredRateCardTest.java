@@ -1,6 +1,5 @@
 package com.ridehailing.pricing;
 
-import com.ridehailing.pricing.TieredRateCard.Slab;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -8,6 +7,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static com.ridehailing.pricing.PricingFixtures.beyond;
+import static com.ridehailing.pricing.PricingFixtures.upTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -15,7 +16,7 @@ class TieredRateCardTest {
 
     /** Same tiers as the hatchback card but no minimum, so the slab arithmetic is visible. */
     private static final TieredRateCard TIERS_ONLY = new TieredRateCard(BigDecimal.ZERO, List.of(
-            Slab.upTo("2", "10"), Slab.upTo("5", "8"), Slab.beyond("5")));
+            upTo("2", "10"), upTo("5", "8"), beyond("5")));
 
     @ParameterizedTest(name = "{0} km -> {1}")
     @CsvSource({
@@ -64,12 +65,12 @@ class TieredRateCardTest {
     @Test
     void rejectsMisconfiguredSlabs() {
         assertThatThrownBy(() -> new TieredRateCard(BigDecimal.ZERO,
-                List.of(Slab.upTo("5", "8"), Slab.upTo("2", "10"), Slab.beyond("5"))))
+                List.of(upTo("5", "8"), upTo("2", "10"), beyond("5"))))
                 .hasMessageContaining("ascending");
-        assertThatThrownBy(() -> new TieredRateCard(BigDecimal.ZERO, List.of(Slab.upTo("2", "10"))))
+        assertThatThrownBy(() -> new TieredRateCard(BigDecimal.ZERO, List.of(upTo("2", "10"))))
                 .hasMessageContaining("unbounded");
         assertThatThrownBy(() -> new TieredRateCard(BigDecimal.ZERO,
-                List.of(Slab.beyond("5"), Slab.upTo("2", "10"))))
+                List.of(beyond("5"), upTo("2", "10"))))
                 .hasMessageContaining("Only the last slab");
     }
 }

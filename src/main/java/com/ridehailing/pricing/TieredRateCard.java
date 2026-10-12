@@ -24,14 +24,6 @@ public final class TieredRateCard implements RateCard {
                 throw new IllegalArgumentException("upToKm must be positive");
             }
         }
-
-        public static Slab upTo(String km, String ratePerKm) {
-            return new Slab(new BigDecimal(km), new BigDecimal(ratePerKm));
-        }
-
-        public static Slab beyond(String ratePerKm) {
-            return new Slab(null, new BigDecimal(ratePerKm));
-        }
     }
 
     private final BigDecimal minimumFare;
