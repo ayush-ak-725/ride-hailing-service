@@ -35,6 +35,13 @@ public class DriverRepository {
         return Optional.ofNullable(driversById.get(id));
     }
 
+    /** Every driver within the radius regardless of status; used to measure local utilization. */
+    public List<Driver> findAllWithin(Location centre, double radiusKm) {
+        return driversById.values().stream()
+                .filter(driver -> driver.cab().location().distanceTo(centre) <= radiusKm)
+                .toList();
+    }
+
     /**
      * Linear scan over all drivers: fine for an in-memory demo. At city scale this becomes a
      * spatial index (geohash / grid cells, or PostGIS / Redis GEO) keyed by car type.

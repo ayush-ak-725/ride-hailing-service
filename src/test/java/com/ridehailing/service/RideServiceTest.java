@@ -10,11 +10,13 @@ import com.ridehailing.domain.User;
 import com.ridehailing.error.DomainException;
 import com.ridehailing.error.ErrorCode;
 import com.ridehailing.pricing.PercentageDiscount;
+import com.ridehailing.pricing.UtilizationSurgePricing;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static com.ridehailing.domain.CarType.HATCHBACK;
 import static com.ridehailing.domain.CarType.SEDAN;
@@ -251,6 +253,71 @@ class RideServiceTest {
 
             assertFailsWith(ErrorCode.DUPLICATE_COUPON, () -> addCoupon("save10", "20"));
             assertFailsWith(ErrorCode.COUPON_NOT_FOUND, () -> app.coupons.delete("MISSING"));
+        }
+    }
+
+    @Nested
+    class Surge {
+
+        private final TestApp surgeApp = new TestApp(drivers -> new UtilizationSurgePricing(drivers, TestApp.RADIUS_KM,
+                List.of(new UtilizationSurgePricing.Tier(0.75, new BigDecimal("1.25")))));
+
+        @Test
+        void multiplierIsFixedAtBookingAndAppliedWhenTheRideEnds() {
+            for (int i = 0; i < 4; i++) {
+                surgeApp.driver(HATCHBACK, 0, 0);
+            }
+            for (int i = 0; i < 3; i++) {
+                surgeApp.rides.book(surgeApp.user().id(), ORIGIN, HATCHBACK, null);   // 3 of 4 cabs busy
+            }
+
+            Ride surged = surgeApp.rides.book(surgeApp.user().id(), ORIGIN, HATCHBACK, null);
+            assertThat(surged.surgeMultiplier()).isEqualByComparingTo("1.25");
+
+            surgeApp.drivers.updateLocation(surged.driverId(), new Location(6, 8));   // 10 km
+            assertThat(surgeApp.rides.end(surged.id()).fare().total()).isEqualByComparingTo("86.25");  // 69 * 1.25
+        }
+    }
+
+    @Nested
+    class Cancellation {
+
+        @Test
+        void isFreeUpToAndIncludingTheGracePeriodAndFreesDriverAndUser() {
+            User user = app.user();
+            Driver driver = app.driver(HATCHBACK, 0, 0);
+            Ride ride = app.rides.book(user.id(), ORIGIN, HATCHBACK, null);
+
+            app.clock.advance(TestApp.GRACE_PERIOD);
+            Ride cancelled = app.rides.cancel(ride.id());
+
+            assertThat(cancelled.status()).isEqualTo(RideStatus.CANCELLED);
+            assertThat(cancelled.cancellationFee()).isEqualByComparingTo("0");
+            assertThat(cancelled.fare()).isNull();
+            assertThat(driver.isAvailable()).isTrue();
+            assertThat(app.rides.book(user.id(), ORIGIN, HATCHBACK, null)).isNotNull();
+        }
+
+        @Test
+        void chargesTheBilledCarTypesFeeAfterTheGracePeriod() {
+            app.driver(SEDAN, 0, 0);
+            Ride upgraded = app.rides.book(app.user().id(), ORIGIN, HATCHBACK, null);
+
+            app.clock.advance(TestApp.GRACE_PERIOD.plusSeconds(1));
+
+            assertThat(app.rides.cancel(upgraded.id()).cancellationFee()).isEqualByComparingTo("25");  // not sedan's 40
+        }
+
+        @Test
+        void cannotCancelAnEndedRideOrEndACancelledOne() {
+            app.driver(HATCHBACK, 0, 0);
+            Ride ended = app.rides.book(app.user().id(), ORIGIN, HATCHBACK, null);
+            app.rides.end(ended.id());
+            Ride cancelled = app.rides.book(app.user().id(), ORIGIN, HATCHBACK, null);
+            app.rides.cancel(cancelled.id());
+
+            assertFailsWith(ErrorCode.RIDE_NOT_ONGOING, () -> app.rides.cancel(ended.id()));
+            assertFailsWith(ErrorCode.RIDE_NOT_ONGOING, () -> app.rides.end(cancelled.id()));
         }
     }
 

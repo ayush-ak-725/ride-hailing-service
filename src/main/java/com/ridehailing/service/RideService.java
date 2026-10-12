@@ -10,6 +10,7 @@ import com.ridehailing.domain.User;
 import com.ridehailing.error.DomainException;
 import com.ridehailing.error.ErrorCode;
 import com.ridehailing.matching.DriverAllocator;
+import com.ridehailing.pricing.CancellationFeePolicy;
 import com.ridehailing.pricing.FareBreakdown;
 import com.ridehailing.pricing.FareCalculator;
 import com.ridehailing.pricing.SurgePricing;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -29,18 +31,20 @@ public class RideService {
     private final DriverAllocator driverAllocator;
     private final SurgePricing surgePricing;
     private final FareCalculator fareCalculator;
+    private final CancellationFeePolicy cancellationFeePolicy;
     private final RideRepository rides;
     private final Clock clock;
 
     public RideService(UserService userService, DriverService driverService, CouponService couponService,
                        DriverAllocator driverAllocator, SurgePricing surgePricing, FareCalculator fareCalculator,
-                       RideRepository rides, Clock clock) {
+                       CancellationFeePolicy cancellationFeePolicy, RideRepository rides, Clock clock) {
         this.userService = userService;
         this.driverService = driverService;
         this.couponService = couponService;
         this.driverAllocator = driverAllocator;
         this.surgePricing = surgePricing;
         this.fareCalculator = fareCalculator;
+        this.cancellationFeePolicy = cancellationFeePolicy;
         this.rides = rides;
         this.clock = clock;
     }
@@ -86,6 +90,16 @@ public class RideService {
 
         ride.complete(dropoff, fare, clock.instant());   // throws if the ride already ended
         driver.release();
+        userService.get(ride.userId()).finishRide();
+        return ride;
+    }
+
+    /** Cancels an ongoing ride, charging the fee set by the cancellation policy. */
+    public Ride cancel(String rideId) {
+        Ride ride = get(rideId);
+        Instant now = clock.instant();
+        ride.cancel(cancellationFeePolicy.feeFor(ride, now), now);   // throws if the ride already ended
+        driverService.get(ride.driverId()).release();
         userService.get(ride.userId()).finishRide();
         return ride;
     }

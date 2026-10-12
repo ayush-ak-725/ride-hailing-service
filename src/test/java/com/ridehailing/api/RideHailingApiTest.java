@@ -109,6 +109,24 @@ class RideHailingApiTest {
     }
 
     @Test
+    void cancellingWithinGracePeriodIsFreeAndCannotBeRepeated() throws Exception {
+        double base = region();
+        String userId = registerUser();
+        registerDriver("SEDAN", base, 0);
+        String rideId = id(send(post("/rides"), bookingJson(userId, base, 0, "SEDAN", null)));
+
+        send(post("/rides/" + rideId + "/cancel"), "")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.cancellationFee").value(0.0));
+        send(post("/rides/" + rideId + "/cancel"), "")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("RIDE_NOT_ONGOING"));
+        mvc.perform(get("/users/" + userId + "/rides"))
+                .andExpect(jsonPath("$.cancelled[0].id").value(rideId));
+    }
+
+    @Test
     void deletingACouponTwiceReturns404() throws Exception {
         String code = "DEL" + UNIQUE.incrementAndGet();
         send(post("/coupons"), """

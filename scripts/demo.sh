@@ -64,6 +64,26 @@ call POST /rides "{\"userId\": \"$VIKRAM\", \"pickup\": {\"x\": $((X0 + 25)), \"
 step "Edge case: unknown car type (400 names the bad field)"
 call POST /rides "{\"userId\": \"$VIKRAM\", \"pickup\": {\"x\": 0}, \"carType\": \"SUV\"}"
 
+step "Cancellation: free within 2 minutes of booking (after that: Rs 25 hatchback / Rs 40 sedan)"
+call POST /rides "{\"userId\": \"$VIKRAM\", \"pickup\": {\"x\": $((X0 + 6)), \"y\": 18}, \"carType\": \"SEDAN\"}" >/dev/null
+call POST "/rides/$(field .id)/cancel" >/dev/null; jq -C '{id, status, cancellationFee}' <<<"$BODY"
+
+step "Surge: 4 hatchbacks in a fresh area, 3 already on rides (75% busy) -> the next booking locks in 1.25x"
+SX=$((X0 + 20))
+for i in 1 2 3 4; do
+  call POST /drivers "{\"name\": \"Surge $i\", \"phone\": \"82${RUN}000$i\", \"plateNumber\": \"SG$i-$RUN\", \"carType\": \"HATCHBACK\", \"location\": {\"x\": $SX, \"y\": 0}}" >/dev/null
+done
+for i in 1 2 3; do
+  call POST /users "{\"name\": \"Busy $i\", \"phone\": \"92${RUN}000$i\"}" >/dev/null
+  call POST /rides "{\"userId\": \"$(field .id)\", \"pickup\": {\"x\": $SX, \"y\": 0}, \"carType\": \"HATCHBACK\"}" >/dev/null
+done
+call POST /users "{\"name\": \"Surged\", \"phone\": \"92${RUN}0009\"}" >/dev/null
+call POST /rides "{\"userId\": \"$(field .id)\", \"pickup\": {\"x\": $SX, \"y\": 0}, \"carType\": \"HATCHBACK\"}" >/dev/null
+jq -C '{id, driverId, surgeMultiplier}' <<<"$BODY"
+RIDE=$(field .id); DRIVER=$(field .driverId)
+call PUT "/drivers/$DRIVER/location" "$(at $((SX + 6)) 8)" >/dev/null
+call POST "/rides/$RIDE/end" >/dev/null; jq -C '.fare' <<<"$BODY"
+
 step "Ride history for Asha and for the sedan driver"
 call GET "/users/$ASHA/rides" >/dev/null
 jq -C '{ongoing: [.ongoing[].id], completed: [.completed[] | {id, total: .fare.total}]}' <<<"$BODY"

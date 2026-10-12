@@ -22,3 +22,18 @@ pricing:
         - { up-to-km: 2, rate-per-km: 15 }
         - { up-to-km: 5, rate-per-km: 12 }
         - { rate-per-km: 8 }
+
+  # Surge from the share of cabs within the search radius that are already on a ride.
+  # The highest tier whose threshold is met applies. The multiplier is fixed at booking.
+  surge:
+    enabled: true
+    tiers:
+      - { min-utilization: 0.75, multiplier: 1.25 }
+      - { min-utilization: 0.90, multiplier: 1.5 }
+
+  # Free within the grace period after booking, then a flat fee for the billed car type.
+  cancellation:
+    grace-period: 2m
+    fees:
+      HATCHBACK: 25
+      SEDAN: 40

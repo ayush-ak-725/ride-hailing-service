@@ -45,6 +45,14 @@ public class RideController {
         return RideResponse.from(rideService.end(rideId));
     }
 
+    @Operation(summary = "Cancel an ongoing ride",
+            description = "Free within the grace period after booking, then a flat fee per car type. "
+                    + "Errors: 404 RIDE_NOT_FOUND, 409 RIDE_NOT_ONGOING.")
+    @PostMapping("/{rideId}/cancel")
+    public RideResponse cancel(@PathVariable String rideId) {
+        return RideResponse.from(rideService.cancel(rideId));
+    }
+
     @Operation(summary = "Get a ride")
     @GetMapping("/{rideId}")
     public RideResponse get(@PathVariable String rideId) {
