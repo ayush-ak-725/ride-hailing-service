@@ -20,6 +20,10 @@ public class DriverService {
         this.drivers = drivers;
     }
 
+    /**
+     * Drivers are unique by cab plate, not by phone: a fleet operator may register several cabs
+     * under one contact number. Real driver identity would come from licence / KYC checks.
+     */
     public Driver register(String name, String phone, String plateNumber, CarType carType,
                            Location location, double rating) {
         String plate = plateNumber.trim().toUpperCase(Locale.ROOT);   // "ka01ab1234" and "KA01AB1234" are one cab

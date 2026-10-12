@@ -67,6 +67,7 @@ curl -X POST localhost:8080/rides -H 'Content-Type: application/json' \
 6. **Locations are (x, y) points on a city grid, in km**, and distance is a straight line. The drop-off is wherever the cab is when the ride ends, so the driver updates their location during or at the end of the ride. Search radius: 5 km, inclusive.
 7. **Coupons** are a percentage off with an optional cap. Codes are case-insensitive. A coupon is valid if it exists, i.e. hasn't been deleted. It's applied at booking, and the discount is *captured* then, so deleting the coupon later doesn't change a booked ride. An invalid code **rejects the booking** (422) rather than silently charging full price. There's no per-user usage limit or expiry.
 8. A rider has at most one ongoing ride, and a driver serves one ride at a time.
+   Riders are unique by phone number. Drivers are unique by cab plate (case-insensitive), not by phone, because a fleet operator may register several cabs under one contact number. Real driver identity would come from licence / KYC checks, which are out of scope.
 9. **Driver rating** is an optional seed value at registration (default 5.0), used only by the highest-rated matching strategy. Normally it would come from rider feedback, which is out of scope.
 10. **No authentication or authorization.** Any caller can act for any user or driver. IDs are sequential (`user-1`, `ride-1`) to keep demos readable.
 

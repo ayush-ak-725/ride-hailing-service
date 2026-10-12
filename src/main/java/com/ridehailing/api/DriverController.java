@@ -32,7 +32,8 @@ public class DriverController {
         this.rideService = rideService;
     }
 
-    @Operation(summary = "Register a driver with their cab", description = "409 DUPLICATE_CAB if the plate is already registered.")
+    @Operation(summary = "Register a driver with their cab", description = "409 DUPLICATE_CAB if the plate is already registered (case-insensitive). "
+                    + "Phone numbers may repeat across drivers, e.g. a fleet operator's contact number.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public DriverResponse register(@Valid @RequestBody RegisterDriverRequest request) {
