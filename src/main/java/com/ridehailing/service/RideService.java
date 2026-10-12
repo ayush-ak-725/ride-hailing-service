@@ -15,6 +15,8 @@ import com.ridehailing.pricing.FareBreakdown;
 import com.ridehailing.pricing.FareCalculator;
 import com.ridehailing.pricing.SurgePricing;
 import com.ridehailing.repository.RideRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -24,6 +26,8 @@ import java.util.List;
 
 @Service
 public class RideService {
+
+    private static final Logger log = LoggerFactory.getLogger(RideService.class);
 
     private final UserService userService;
     private final DriverService driverService;
@@ -77,6 +81,9 @@ public class RideService {
                 surgeMultiplier, coupon == null ? null : coupon.code(), coupon == null ? null : coupon.discount(),
                 clock.instant());
         rides.save(ride);
+        log.info("Ride booked: rideId={} userId={} driverId={} requested={} assigned={} upgraded={} surge={} coupon={}",
+                ride.id(), user.id(), driver.id(), carType, ride.assignedCarType(), ride.upgraded(),
+                surgeMultiplier, ride.couponCode());
         return ride;
     }
 
@@ -95,6 +102,9 @@ public class RideService {
         ride.complete(dropoff, fare, clock.instant());   // throws if the ride already ended
         driver.release();
         userService.get(ride.userId()).finishRide();
+        log.info("Ride completed: rideId={} driverId={} distanceKm={} baseFare={} surge={} discount={} total={}",
+                ride.id(), driver.id(), fare.distanceKm(), fare.baseFare(), fare.surgeMultiplier(),
+                fare.discount(), fare.total());
         return ride;
     }
 
@@ -105,6 +115,7 @@ public class RideService {
         ride.cancel(cancellationFeePolicy.feeFor(ride, now), now);   // throws if the ride already ended
         driverService.get(ride.driverId()).release();
         userService.get(ride.userId()).finishRide();
+        log.info("Ride cancelled: rideId={} driverId={} fee={}", ride.id(), ride.driverId(), ride.cancellationFee());
         return ride;
     }
 

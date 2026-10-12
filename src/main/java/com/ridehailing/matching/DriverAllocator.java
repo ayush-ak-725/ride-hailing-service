@@ -5,6 +5,8 @@ import com.ridehailing.domain.CarType;
 import com.ridehailing.domain.Driver;
 import com.ridehailing.domain.Location;
 import com.ridehailing.repository.DriverRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -16,6 +18,8 @@ import java.util.Optional;
  */
 @Component
 public class DriverAllocator {
+
+    private static final Logger log = LoggerFactory.getLogger(DriverAllocator.class);
 
     private final DriverRepository drivers;
     private final DriverMatchingStrategy matchingStrategy;
@@ -36,17 +40,24 @@ public class DriverAllocator {
             if (claimed.isPresent()) {
                 return claimed;
             }
-            carType = carType.get().freeUpgrade();
+            Optional<CarType> upgrade = carType.get().freeUpgrade();
+            upgrade.ifPresent(next -> log.info("No {} available near {}; trying free upgrade to {}", requested, pickup, next));
+            carType = upgrade;
         }
         return Optional.empty();
     }
 
     private Optional<Driver> claimFirstAvailable(CarType carType, Location pickup) {
         var candidates = drivers.findAvailableWithin(carType, pickup, searchRadiusKm);
+        log.debug("{} available {} driver(s) within {} km of {}", candidates.size(), carType, searchRadiusKm, pickup);
         // Another booking may claim a candidate between the search and here; tryAssign() is the
         // atomic check, and on losing the race we simply move to the next-best driver.
-        return matchingStrategy.rank(candidates, pickup).stream()
-                .filter(Driver::tryAssign)
-                .findFirst();
+        for (Driver driver : matchingStrategy.rank(candidates, pickup)) {
+            if (driver.tryAssign()) {
+                return Optional.of(driver);
+            }
+            log.debug("Driver {} was claimed by a concurrent booking; trying the next candidate", driver.id());
+        }
+        return Optional.empty();
     }
 }

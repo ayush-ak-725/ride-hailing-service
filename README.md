@@ -112,13 +112,22 @@ flowchart LR
 | **409 for `NO_DRIVER_AVAILABLE`** | The request is valid but conflicts with the current state (no free cab). | 503 suggests a server fault and would trigger alerts and blind retries. |
 | **Service tests use the real objects, wired by hand, with no mocks** | They test real behavior and run in milliseconds. Spring is loaded only for the HTTP contract tests. | Mock-heavy tests that only check which methods were called. |
 
+### Error handling and logging
+
+- **One error path.** Services throw `DomainException` with an `ErrorCode`. `ApiExceptionHandler` is the only place that maps codes to HTTP statuses, and it also wraps validation, malformed JSON and Spring MVC errors (404/405/415) in the same JSON shape. Unexpected exceptions return a 500 with no internal details; the message quotes the request id instead.
+- **Request id on every log line.** `RequestLoggingFilter` reuses a caller's `X-Request-Id` only if it is short and alphanumeric, otherwise it generates one. The id is returned in the response header and printed on every log line, so one request can be traced end to end. Each request also gets one access-log line (method, path, status, time taken).
+- **Each event logged once.** Services log successful state changes at INFO: registered, booked (with upgrade, surge and coupon), completed (with the fare breakdown), cancelled (with the fee), coupon added or deleted. The exception handler logs every rejection once at INFO with its code. Only unexpected failures are logged at ERROR, with the stack trace.
+- **DEBUG detail.** Candidate counts, drivers lost to a concurrent booking, and cab location updates. Enable with `--logging.level.com.ridehailing=DEBUG`.
+- **Safe logs.** Phone numbers are never logged (a test checks this). Line breaks in user-supplied path values are replaced before logging, so callers can't forge log lines.
+- **Startup.** The effective rate cards, matching strategy, surge tiers and cancellation policy are logged when the app starts.
+
 ### Concurrency
 
 `BookingConcurrencyTest` releases 32 riders simultaneously against 2 drivers, repeated 20 times. The test asserts that exactly 2 bookings succeed, the two drivers are different, and everyone else gets `NO_DRIVER_AVAILABLE`. To check the test can actually catch a race, I temporarily replaced the atomic claim with a check-then-set: 17 of the 20 repetitions failed.
 
 ## Testing
 
-90 tests, all passing (`./mvnw test`).
+96 tests, all passing (`./mvnw test`).
 
 | Suite | Covers |
 |---|---|
@@ -127,6 +136,7 @@ flowchart LR
 | `RideServiceTest` | Radius boundary, no driver nearby (and the user is released afterwards), busy drivers skipped, one ongoing ride per user, **free upgrade billed at the Hatchback rate**, requested type preferred over a closer Sedan, no downgrade, ending a ride twice, valid / invalid / deleted coupon, coupon deleted after booking, cancellation grace boundary, history, surge from booking to fare |
 | `BookingConcurrencyTest` | Two bookings can never get the same driver |
 | `UtilizationSurgePricingTest`, `DriverMatchingStrategyTest` | Strategy behavior on its own |
+| `LoggingAndCorrelationTest` | Request id reused or regenerated, state changes and rejections logged once, no phone numbers in logs, line breaks neutralised, 500 response hides internals |
 | `RideHailingApiTest` | HTTP lifecycle, status codes, error shape, validation details, unknown enum, infinite coordinates, OpenAPI document |
 
 **Black-box endpoint check.** `scripts/api-check.sh` sends real HTTP requests to a running server and

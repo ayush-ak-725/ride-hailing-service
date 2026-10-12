@@ -5,6 +5,7 @@ import com.ridehailing.error.DomainException;
 import com.ridehailing.error.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -32,6 +33,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ErrorResponse> handleDomain(DomainException ex) {
+        // Expected business outcome, not a fault: INFO, no stack trace.
+        log.info("Request rejected: code={} message={}", ex.code(), sanitize(ex.getMessage()));
         return ResponseEntity.status(statusFor(ex.code()))
                 .body(ErrorResponse.of(ex.code().name(), ex.getMessage(), List.of()));
     }
@@ -39,8 +42,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
         log.error("Unhandled exception", ex);
+        String requestId = MDC.get(RequestLoggingFilter.MDC_KEY);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred", List.of()));
+                .body(ErrorResponse.of("INTERNAL_ERROR",
+                        "An unexpected error occurred. Quote request id " + requestId + " when reporting it.", List.of()));
     }
 
     static HttpStatus statusFor(ErrorCode code) {
@@ -59,6 +64,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .sorted()
                 .toList();
+        log.info("Request rejected: code=VALIDATION_FAILED details={}", sanitize(details.toString()));
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("VALIDATION_FAILED", "Request validation failed", details));
     }
@@ -72,6 +78,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                         .map(ref -> ref.getPropertyName() != null ? ref.getPropertyName() : "[" + ref.getIndex() + "]")
                         .collect(Collectors.joining(".")) + ": invalid value")
                 : List.of();
+        log.info("Request rejected: code=MALFORMED_REQUEST details={}", details);
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of("MALFORMED_REQUEST", "Request body is missing or not valid JSON", details));
     }
@@ -86,6 +93,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 && springError.getBody().getDetail() != null
                 ? springError.getBody().getDetail()
                 : "Request could not be processed";
+        log.info("Request rejected: code={} message={}", code, sanitize(message));
         return ResponseEntity.status(statusCode).headers(headers).body(ErrorResponse.of(code, message, List.of()));
+    }
+
+    /** Path variables are user input and may decode to CR/LF; keep each log entry on one line. */
+    private static String sanitize(String value) {
+        return value == null ? null : value.replaceAll("[\\r\\n\\t]", "_");
     }
 }
