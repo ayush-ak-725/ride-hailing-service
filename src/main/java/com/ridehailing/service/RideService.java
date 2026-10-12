@@ -62,7 +62,7 @@ public class RideService {
         }
         Driver driver = driverAllocator.claim(carType, pickup).orElseThrow(() -> {
             user.finishRide();
-            return new DomainException(ErrorCode.NO_DRIVER_AVAILABLE, "No " + carType + " or upgrade available near the pickup point");
+            return new DomainException(ErrorCode.NO_DRIVER_AVAILABLE, "No driver available near the pickup point for " + carType);
         });
 
         Ride ride = new Ride(rides.nextId(), user.id(), driver.id(), carType, driver.cab().carType(), pickup,
