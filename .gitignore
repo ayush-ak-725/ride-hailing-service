@@ -1,0 +1,11 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build
+target/
+out/
+
+# OS
+.DS_Store
