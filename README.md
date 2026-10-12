@@ -173,14 +173,112 @@ docker run -d -p 8082:8080 ride-hailing-service --pricing.cancellation.grace-per
 
 ## How I used AI
 
-I built this with Claude Code as a pair programmer. I set the direction and made the decisions; the AI did the typing and its output was reviewed against tests.
+I built this with Claude Code as a pair programmer. My rule for myself: the AI can write code, but
+every design decision is mine, and nothing counts as done until it is tested and I can explain it.
 
-- **What I prompted for:** reading the assignment PDF and listing the requirements; a design proposal with the requirement → test checklist; a list of options and trade-offs for each design choice (Spring Boot 4 vs 3.5, how tiers apply, the distance model, the concurrency approach, the surge signal, the cancellation policy). I made each of those choices myself before any code was written for it. After that: the implementation one milestone at a time, with tests written alongside, and a self-review pass at the end.
-- **What I rejected:** a decorator chain for pricing (it hides the order of the steps); repository interfaces (only one implementation each); "whole ride at one bracket's rate" for tiers (longer rides could cost less); a sliding-window surge (too much machinery for a bonus item); separate copies of the response classes for value types like `FareBreakdown`.
-- **What I rewrote after review:**
-  - The rollback of the user's reservation was a side effect inside `orElseThrow`'s supplier and only covered one failure path. It's now an explicit try/catch.
-  - The receipt showed a rounded distance but charged the unrounded one. It now prices the distance it shows.
+### 1. Setting the ground rules: the system prompt
+
+Before sharing the assignment, I gave the AI a system prompt that set how it should work:
+
+- **Role:** a Senior/Staff backend engineer and a strict code reviewer, responsible for everything
+  from understanding the problem to delivering it.
+- **Priorities, in order:** correctness, then data integrity and security, then clear design,
+  tests, reliability, performance, extensibility and documentation.
+- **Hard rules:** don't invent requirements; never claim something works without running it; never
+  make up test results; prefer the simplest design that fully meets the brief; no "architecture
+  decoration" such as microservices or CQRS; SOLID applied pragmatically, not dogmatically.
+- **A fixed workflow:** understand → propose → implement with tests → validate → prepare for the
+  review. In particular, it had to show me a requirement-to-test checklist, the architecture, the
+  API contracts, the data model and the milestones before writing any real code.
+
+I added one more rule during the session: **wherever there is a real trade-off in design or tech
+stack, present the options and wait for my decision before implementing.**
+
+### 2. Requirements
+
+I gave the AI the assignment PDF and asked for every requirement to be extracted and mapped to the
+place it would be implemented and the test that would prove it.
+
+- **Functional:** the 10 mandatory requirements (registration, cab location, booking within a
+  radius, ending a ride with its cost, tiered pricing with a minimum fare, history for users and
+  drivers, Sedan/Hatchback rates with the free upgrade, coupons) and the 4 bonus items (surge,
+  switchable matching, cancellation fee, concurrency safety).
+- **Non-functional, which I made explicit:** correct money handling (`BigDecimal`, receipts that
+  add up), no double-booking under concurrent requests, uniqueness checks that are safe under
+  concurrency, validated input with one consistent error format, no internals leaked in errors,
+  extension points where the brief says things will change, and a project a reviewer can run and
+  test with one command.
+- **Assumptions:** anything the brief left open was written down (see *Assumptions* above) rather
+  than silently decided in code.
+
+### 3. Trade-offs I decided
+
+For each of these, the AI laid out the options with pros and cons and a recommendation, and I chose:
+
+| Decision | What I chose | Why, briefly |
+|---|---|---|
+| Interface | REST API with Swagger | Easy to demo edge cases; self-documenting |
+| Spring Boot version | 4.1 rather than 3.5 | Current release line with proper Java 25 support |
+| How tiers apply | Each km at its own slab's rate | The other reading makes 7 km cheaper than 5 km |
+| Distance model | (x, y) grid in km | Exact, predictable fares for tests and demo; haversine is a one-method change |
+| Preventing double-booking | Atomic claim on the driver | Non-blocking; maps to optimistic locking in a database |
+| Surge signal | Share of nearby cabs that are busy | No extra state; a request-rate window was too much for a bonus item |
+| Cancellation policy | Free grace period, then a flat fee per car type | Simple to explain and test |
+
+The AI also proposed defaults that I reviewed and accepted: one explicit fare pipeline instead of a
+decorator chain, no repository interfaces with a single implementation, a linear scan for nearby
+drivers (a spatial index noted as future work), rejecting an invalid coupon with 422 rather than
+silently charging full price, and pricing settings in config that are checked at startup.
+
+### 4. Building it
+
+The core was built in milestones, one commit each, with tests written alongside the code:
+project setup → pricing engine → booking, matching, upgrade and coupons → REST layer → bonus items
+→ review fixes → README. Fares in tests were calculated by hand rather than copied from program
+output.
+
+### 5. Improvements after the core was done
+
+Once the mandatory scope was solid, I asked for further work on a separate `improvisation` branch:
+
+- **Docker:** a two-stage build that only needs Docker, runs as a non-root user, sizes its memory
+  from the container limit and shuts down cleanly. I verified it by running the full demo against
+  the container.
+- **Endpoint checks:** `scripts/api-check.sh`, 72 checks of the success and failure responses of
+  every endpoint against the requirements, including 20 simultaneous bookings for one driver.
+- **Logging and error handling:** a request id on every log line (also returned in the
+  `X-Request-Id` header), each state change and each rejection logged exactly once, phone numbers
+  never logged, protection against log injection, and 500 responses that quote the request id
+  instead of exposing internals.
+- **Cleanup from my own gap review:** test-only helper methods moved out of the main code, and the
+  rule "drivers are unique by plate, riders by phone" documented as a deliberate decision.
+
+### 6. What I rejected or rewrote, and why
+
+- **Rejected designs:** a decorator chain for pricing (hides the order of steps); interfaces with a
+  single implementation (speculative abstraction); charging the whole ride at one tier's rate
+  (longer rides could cost less); a sliding-window surge (too much machinery for a bonus item).
+- **Bugs caught in review and fixed:**
+  - The receipt showed a rounded distance but charged the unrounded one. It now prices the
+    distance it shows.
+  - A failed booking released the rider's reservation from inside an `orElseThrow` callback, and
+    only on one failure path. It's now an explicit try/catch.
   - Plate numbers were case-sensitive for uniqueness.
-  - A test helper shared a counter between ID generation and grid regions, which would have pushed coordinates out of bounds as more tests were added.
-  - A test created plate numbers from `System.nanoTime()`.
-- **How I checked the result:** the expected fares in the tests are calculated by hand rather than copied from program output. The concurrency test was mutation-tested (I broke the code on purpose to confirm the test fails). `scripts/demo.sh` was run against the live server, and every fare it printed matched the hand calculation. `javac -Xlint:all` reports no warnings.
+- **Tests that were themselves wrong:**
+  - A test helper shared one counter for two purposes, which would eventually have pushed
+    coordinates out of range.
+  - The first endpoint-check run reported 45 failures. All were bugs in the script (phone numbers
+    one digit too short, and a counter that never advanced), not in the app.
+  - The first log-injection test passed for the wrong reason, because the test tool encoded the
+    `%`, so no real line break was ever sent.
+
+### 7. How I convinced myself it is correct
+
+- **Fares:** every expected fare in the tests was worked out by hand.
+- **Mutation testing:** I broke the code on purpose to confirm the tests catch it. With a
+  non-atomic driver claim, the concurrency test failed 17 of 20 runs; with the log sanitizer
+  removed, the log-injection test failed.
+- **Live runs:** the demo script and the endpoint checks were run against the live server and
+  against the Docker image.
+- **Compiler and imports:** `javac -Xlint:all` reports zero warnings, and there are no unused
+  imports.
